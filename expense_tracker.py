@@ -10,14 +10,20 @@ Features:
 ✔ Persistent JSON-based Storage
 ✔ Clean OOP Design with Error Handling
 ✔ Beautiful CLI with Rich Library
+✔ Optional Browser-Based Frontend
 
 Author: Neil ⚡
 ───────────────────────────────────────────────
 """
 
 import json
+import math
 import os
+import re
+import sys
 from datetime import datetime, date
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 from rich.prompt import Prompt, FloatPrompt, IntPrompt
@@ -188,16 +194,145 @@ class DigitalDiaryX:
         try:
             with open(self.EXPENSE_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                self.expenses = [Expense(**item) for item in data]
+                self.expenses = [
+                    Expense(item["category"], item["amount"], item.get("date"))
+                    for item in data
+                ]
         except Exception as e:
             console.print(f"[red]✗ Error loading expenses:[/red] {e}")
 
     def save_expenses(self):
-        try:
-            with open(self.EXPENSE_FILE, "w", encoding="utf-8") as f:
-                json.dump([e.to_dict() for e in self.expenses], f, indent=4)
-        except Exception as e:
-            console.print(f"[red]✗ Error saving expenses:[/red] {e}")
+        with open(self.EXPENSE_FILE, "w", encoding="utf-8") as f:
+            json.dump([e.to_dict() for e in self.expenses], f, indent=4)
+
+
+def create_web_server(app, host="127.0.0.1", port=8000):
+    class DiaryRequestHandler(BaseHTTPRequestHandler):
+        def send_json(self, status, payload):
+            body = json.dumps(payload).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def read_json(self):
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+            except ValueError as error:
+                raise ValueError("Invalid Content-Length header.") from error
+            if content_length <= 0 or content_length > 1_000_000:
+                raise ValueError("Request body must be between 1 byte and 1 MB.")
+            try:
+                return json.loads(self.rfile.read(content_length))
+            except (json.JSONDecodeError, UnicodeDecodeError) as error:
+                raise ValueError("Request body must contain valid JSON.") from error
+
+        def do_GET(self):
+            if self.path == "/":
+                try:
+                    body = Path(__file__).with_name("index.html").read_bytes()
+                except OSError:
+                    self.send_error(500, "Could not read the frontend file.")
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
+            if self.path == "/api/expenses":
+                self.send_json(200, [expense.to_dict() for expense in app.expenses])
+                return
+
+            if self.path == "/api/diary":
+                entries = []
+                if os.path.exists(app.DIARY_FILE):
+                    with open(app.DIARY_FILE, "r", encoding="utf-8") as diary_file:
+                        contents = diary_file.read()
+                    pattern = r"=== Entry \[(.*?)\] ===\n(.*?)\n====================="
+                    entries = [
+                        {"date": entry_date, "text": text}
+                        for entry_date, text in re.findall(pattern, contents, re.DOTALL)
+                    ]
+                self.send_json(200, entries)
+                return
+
+            self.send_error(404, "Not found.")
+
+        def do_POST(self):
+            try:
+                payload = self.read_json()
+                if not isinstance(payload, dict):
+                    raise ValueError("Request body must be a JSON object.")
+
+                if self.path == "/api/expenses":
+                    category = payload.get("category")
+                    amount = payload.get("amount")
+                    expense_date = payload.get("date", date.today().isoformat())
+                    if not isinstance(category, str) or not category.strip():
+                        raise ValueError("Category is required.")
+                    if isinstance(amount, bool) or not isinstance(amount, (int, float)):
+                        raise ValueError("Amount must be a positive number.")
+                    try:
+                        amount = float(amount)
+                    except (OverflowError, ValueError) as error:
+                        raise ValueError("Amount must be a positive number.") from error
+                    if not math.isfinite(amount) or amount <= 0:
+                        raise ValueError("Amount must be a positive number.")
+                    if not isinstance(expense_date, str):
+                        raise ValueError("Date must use YYYY-MM-DD format.")
+                    try:
+                        datetime.strptime(expense_date, "%Y-%m-%d")
+                    except ValueError as error:
+                        raise ValueError("Date must use YYYY-MM-DD format.") from error
+
+                    expense = Expense(category, amount, expense_date)
+                    app.expenses.append(expense)
+                    try:
+                        app.save_expenses()
+                    except OSError:
+                        app.expenses.pop()
+                        raise
+                    self.send_json(201, expense.to_dict())
+                    return
+
+                if self.path == "/api/diary":
+                    text = payload.get("text")
+                    if not isinstance(text, str) or not text.strip():
+                        raise ValueError("Diary entry cannot be empty.")
+                    entry_date = date.today().isoformat()
+                    with open(app.DIARY_FILE, "a", encoding="utf-8") as diary_file:
+                        diary_file.write(
+                            f"=== Entry [{entry_date}] ===\n{text.strip()}\n"
+                            "=====================\n\n"
+                        )
+                    self.send_json(201, {"date": entry_date, "text": text.strip()})
+                    return
+
+                self.send_error(404, "Not found.")
+            except ValueError as error:
+                self.send_json(400, {"error": str(error)})
+            except OSError as error:
+                self.send_error(500, f"Could not save data: {error}")
+
+        def log_message(self, format_string, *args):
+            console.print(f"[dim]Web: {format_string % args}[/dim]")
+
+    return HTTPServer((host, port), DiaryRequestHandler)
+
+
+def start_web_frontend(app, host="127.0.0.1", port=8000):
+    server = create_web_server(app, host, port)
+    console.print(f"[bold green]Digital Diary is ready at http://{host}:{server.server_port}[/bold green]")
+    console.print("[dim]Press Ctrl+C to stop the web server.[/dim]")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Web server stopped.[/yellow]")
+    finally:
+        server.server_close()
 
 
 # ============================================================
@@ -205,4 +340,7 @@ class DigitalDiaryX:
 # ============================================================
 if __name__ == "__main__":
     app = DigitalDiaryX()
-    app.start()
+    if len(sys.argv) > 1 and sys.argv[1] == "--web":
+        start_web_frontend(app)
+    else:
+        app.start()

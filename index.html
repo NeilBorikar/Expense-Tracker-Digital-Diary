@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7f6">
+  <title>Digital Diary — Expense Tracker</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1d2925;
+      --muted: #78827d;
+      --line: #e8ece9;
+      --paper: #fff;
+      --canvas: #f5f7f6;
+      --green: #266d55;
+      --green-dark: #1f5845;
+      --green-pale: #eaf3ee;
+      --orange: #e5a56d;
+      --shadow: 0 12px 35px rgb(34 54 45 / 6%);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); }
+    button, input, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .layout { min-height: 100vh; display: grid; grid-template-columns: 248px 1fr; }
+    aside {
+      position: sticky; top: 0; height: 100vh; padding: 30px 18px;
+      background: #fff; border-right: 1px solid var(--line); display: flex; flex-direction: column;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; padding: 0 10px 38px; }
+    .brand-mark {
+      width: 42px; height: 42px; display: grid; place-items: center;
+      color: #fff; background: var(--green); border-radius: 14px; font-size: 21px;
+    }
+    .brand strong { display: block; font-size: 15px; letter-spacing: -.3px; }
+    .brand small { color: var(--muted); font-size: 11px; }
+    .nav-label { padding: 0 12px 10px; color: #a0a9a4; font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; }
+    .nav-button {
+      width: 100%; padding: 12px; border: 0; border-radius: 10px; background: transparent;
+      color: #707b75; text-align: left; font-size: 13px; font-weight: 600; margin-bottom: 4px;
+    }
+    .nav-button span { display: inline-block; width: 28px; font-size: 16px; }
+    .nav-button:hover, .nav-button.active { background: var(--green-pale); color: var(--green-dark); }
+    .sidebar-note { margin-top: auto; padding: 16px; border-radius: 14px; background: #f7f8f6; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .sidebar-note strong { color: var(--ink); display: block; margin-bottom: 3px; }
+    main { min-width: 0; padding: 34px clamp(20px, 5vw, 66px) 60px; max-width: 1480px; width: 100%; margin: 0 auto; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 34px; }
+    .eyebrow { color: var(--green); font-size: 11px; font-weight: 700; letter-spacing: 1.3px; text-transform: uppercase; }
+    h1 { margin: 5px 0 0; font-size: clamp(24px, 3vw, 31px); letter-spacing: -1.1px; }
+    .today { color: var(--muted); font-size: 12px; }
+    .section { display: none; }
+    .section.active { display: block; }
+    .welcome {
+      position: relative; overflow: hidden; display: flex; justify-content: space-between; align-items: center;
+      min-height: 160px; padding: 30px 36px; border-radius: 18px; color: #fff;
+      background: linear-gradient(110deg, #286e56, #388466);
+    }
+    .welcome::after { content: ""; position: absolute; width: 240px; height: 240px; border: 1px solid rgb(255 255 255 / 13%); border-radius: 50%; right: 12%; top: -110px; box-shadow: 0 0 0 30px rgb(255 255 255 / 4%), 0 0 0 60px rgb(255 255 255 / 3%); }
+    .welcome p { margin: 0 0 7px; color: #d3e6dc; font-size: 13px; }
+    .welcome h2 { margin: 0; font-size: clamp(22px, 3vw, 29px); letter-spacing: -.8px; }
+    .welcome .welcome-total { position: relative; z-index: 1; text-align: right; }
+    .welcome .welcome-total span { display: block; color: #d3e6dc; font-size: 12px; }
+    .welcome .welcome-total strong { display: block; margin-top: 6px; font-size: 27px; letter-spacing: -.8px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 20px 0 28px; }
+    .stat, .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 15px; box-shadow: var(--shadow); }
+    .stat { min-height: 112px; padding: 18px 20px; }
+    .stat-label { color: var(--muted); font-size: 12px; }
+    .stat-value { display: block; margin-top: 10px; font-size: 22px; font-weight: 700; letter-spacing: -.6px; }
+    .stat-icon { float: right; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--green-pale); color: var(--green); }
+    .content-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(250px, .75fr); gap: 18px; }
+    .panel { padding: 22px; }
+    .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 19px; }
+    .panel-heading h2 { margin: 0; font-size: 15px; letter-spacing: -.2px; }
+    .text-button { padding: 5px 0; border: 0; background: none; color: var(--green); font-size: 12px; font-weight: 700; }
+    .text-button:hover { color: var(--green-dark); }
+    .expense-list { display: grid; gap: 2px; }
+    .expense-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid #f0f2f0; }
+    .expense-main { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    .category-icon { display: grid; place-items: center; flex: 0 0 38px; height: 38px; border-radius: 12px; background: #f3f5f3; font-size: 17px; }
+    .expense-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 650; }
+    .expense-date { margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .expense-amount { white-space: nowrap; font-size: 13px; font-weight: 700; }
+    .category-list { display: grid; gap: 16px; }
+    .category-heading { display: flex; justify-content: space-between; margin-bottom: 7px; font-size: 12px; }
+    .category-heading span:last-child { color: var(--muted); }
+    .bar { height: 6px; border-radius: 8px; background: #eef1ef; overflow: hidden; }
+    .bar span { display: block; height: 100%; border-radius: inherit; background: var(--green); }
+    .empty { padding: 30px 10px; color: var(--muted); text-align: center; font-size: 13px; }
+    .page-heading { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 20px; }
+    .page-heading h2 { margin: 0; font-size: 21px; letter-spacing: -.6px; }
+    .page-heading p { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+    .primary-button { padding: 11px 15px; border: 0; border-radius: 9px; background: var(--green); color: #fff; font-size: 12px; font-weight: 700; }
+    .primary-button:hover { background: var(--green-dark); }
+    .filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+    .filters input, .filters select { min-width: 145px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--ink); font-size: 12px; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th { padding: 10px 12px; border-bottom: 1px solid var(--line); color: #99a19d; font-size: 10px; letter-spacing: .8px; text-transform: uppercase; }
+    td { padding: 14px 12px; border-bottom: 1px solid #f0f2f0; font-size: 12px; }
+    td:last-child, th:last-child { text-align: right; }
+    .diary-grid { display: grid; grid-template-columns: minmax(260px, .75fr) minmax(0, 1.25fr); gap: 18px; align-items: start; }
+    .form-panel label { display: block; margin-bottom: 7px; color: #626d67; font-size: 11px; font-weight: 650; }
+    .form-panel input, .form-panel textarea { width: 100%; padding: 11px 12px; margin-bottom: 15px; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--ink); font-size: 13px; }
+    .form-panel textarea { min-height: 145px; resize: vertical; line-height: 1.55; }
+    .form-panel .primary-button { width: 100%; }
+    .expense-form { margin-bottom: 16px; }
+    .expense-fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .expense-fields label { display: block; margin-bottom: 7px; color: #626d67; font-size: 11px; font-weight: 650; }
+    .expense-fields input { width: 100%; padding: 10px 11px; border: 1px solid var(--line); border-radius: 9px; background: #fff; color: var(--ink); font-size: 13px; }
+    .expense-form .primary-button { width: auto; }
+    .entry { padding: 16px 0; border-top: 1px solid #f0f2f0; }
+    .entry-date { color: var(--green); font-size: 10px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; }
+    .entry-text { margin-top: 8px; color: #515c56; font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .toast { position: fixed; right: 24px; bottom: 24px; z-index: 5; max-width: min(390px, calc(100vw - 48px)); padding: 13px 17px; border-radius: 10px; background: #24352e; color: #fff; box-shadow: var(--shadow); font-size: 12px; }
+    .toast.error { background: #8e3c36; }
+    .toast[hidden] { display: none; }
+    @media (max-width: 850px) {
+      .layout { grid-template-columns: 76px 1fr; }
+      aside { padding: 22px 10px; }
+      .brand { justify-content: center; padding: 0 0 32px; }
+      .brand-copy, .nav-label, .nav-button .nav-text, .sidebar-note { display: none; }
+      .nav-button { text-align: center; padding: 12px 4px; }
+      .nav-button span { width: auto; }
+      .content-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 590px) {
+      .layout { display: block; }
+      aside { position: sticky; z-index: 3; top: 0; width: 100%; height: auto; padding: 9px 14px; flex-direction: row; align-items: center; border-right: 0; border-bottom: 1px solid var(--line); }
+      .brand { padding: 0; margin-right: auto; }
+      .brand-mark { width: 36px; height: 36px; border-radius: 11px; }
+      aside nav { display: flex; gap: 3px; }
+      .nav-button { width: 42px; margin: 0; }
+      main { padding: 24px 16px 40px; }
+      .topbar { margin-bottom: 24px; }
+      .welcome { min-height: 140px; padding: 24px 20px; }
+      .welcome .welcome-total strong { font-size: 20px; }
+      .stats { gap: 8px; margin: 13px 0 20px; }
+      .stat { min-height: 96px; padding: 14px 11px; }
+      .stat-label { font-size: 10px; }
+      .stat-value { font-size: 16px; }
+      .stat-icon { display: none; }
+      .panel { padding: 17px; }
+      .diary-grid { grid-template-columns: 1fr; }
+      .expense-fields { grid-template-columns: 1fr; }
+      .today { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside>
+      <div class="brand">
+        <div class="brand-mark">◷</div>
+        <div class="brand-copy"><strong>Daily Ledger</strong><small>Your personal space</small></div>
+      </div>
+      <nav aria-label="Main navigation">
+        <div class="nav-label">Workspace</div>
+        <button class="nav-button active" data-page="overview"><span>⌂</span><span class="nav-text">Overview</span></button>
+        <button class="nav-button" data-page="expenses"><span>↗</span><span class="nav-text">Expenses</span></button>
+        <button class="nav-button" data-page="diary"><span>▤</span><span class="nav-text">My diary</span></button>
+      </nav>
+      <div class="sidebar-note"><strong>A little more mindful</strong>Track your spending and keep a note of the moments that matter.</div>
+    </aside>
+    <main>
+      <header class="topbar">
+        <div><div class="eyebrow">Personal dashboard</div><h1 id="page-title">Overview</h1></div>
+        <div class="today" id="today"></div>
+      </header>
+
+      <section class="section active" id="overview">
+        <div class="welcome">
+          <div><p>Your money, in perspective</p><h2>Small steps add up.</h2></div>
+          <div class="welcome-total"><span>Total tracked</span><strong id="hero-total">₹0.00</strong></div>
+        </div>
+        <div class="stats">
+          <article class="stat"><span class="stat-icon">₹</span><span class="stat-label">Total expenses</span><strong class="stat-value" id="total-stat">₹0.00</strong></article>
+          <article class="stat"><span class="stat-icon">↗</span><span class="stat-label">Transactions</span><strong class="stat-value" id="count-stat">0</strong></article>
+          <article class="stat"><span class="stat-icon">▤</span><span class="stat-label">Diary entries</span><strong class="stat-value" id="diary-stat">0</strong></article>
+        </div>
+        <div class="content-grid">
+          <article class="panel">
+            <div class="panel-heading"><h2>Recent expenses</h2><button class="text-button" data-page="expenses">View all →</button></div>
+            <div class="expense-list" id="recent-expenses"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading"><h2>Spending by category</h2></div>
+            <div class="category-list" id="category-breakdown"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="expenses">
+        <div class="page-heading"><div><h2>All expenses</h2><p>Keep an eye on where your money goes.</p></div><button class="primary-button" id="new-expense">＋ Add expense</button></div>
+        <form class="panel expense-form" id="expense-form" hidden>
+          <div class="expense-fields">
+            <div><label for="expense-category">Category</label><input id="expense-category" required maxlength="80" placeholder="e.g. Groceries"></div>
+            <div><label for="expense-amount">Amount (₹)</label><input id="expense-amount" type="number" min="0.01" step="0.01" required placeholder="0.00"></div>
+            <div><label for="expense-date">Date</label><input id="expense-date" type="date" required></div>
+          </div>
+          <button class="primary-button" type="submit">Save expense</button>
+        </form>
+        <div class="filters">
+          <input type="search" id="expense-search" placeholder="Search category…" aria-label="Search expenses by category">
+          <input type="date" id="expense-date-filter" aria-label="Filter expenses by date">
+          <select id="sort-expenses" aria-label="Sort expenses"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="amount">Highest amount</option></select>
+        </div>
+        <article class="panel table-wrap">
+          <table><thead><tr><th>Date</th><th>Category</th><th>Amount</th></tr></thead><tbody id="expenses-table"></tbody></table>
+        </article>
+      </section>
+
+      <section class="section" id="diary">
+        <div class="page-heading"><div><h2>My diary</h2><p>A place for the little things you want to remember.</p></div></div>
+        <div class="diary-grid">
+          <form class="panel form-panel" id="diary-form">
+            <label for="diary-text">Today's entry</label>
+            <textarea id="diary-text" placeholder="What would you like to remember?" required></textarea>
+            <button class="primary-button" type="submit">Save diary entry</button>
+          </form>
+          <article class="panel">
+            <div class="panel-heading"><h2>Past entries</h2></div>
+            <div id="diary-entries"></div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script>
+    const money = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" });
+    const expensesList = document.getElementById("recent-expenses");
+    const tableBody = document.getElementById("expenses-table");
+    const toast = document.getElementById("toast");
+    let expenses = [];
+    let diaryEntries = [];
+    let toastTimer;
+
+    document.getElementById("today").textContent = new Intl.DateTimeFormat("en-IN", {
+      weekday: "long", day: "numeric", month: "long", year: "numeric"
+    }).format(new Date());
+
+    async function request(url, options) {
+      const response = await fetch(url, options);
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || `Request failed (${response.status}).`);
+      return result;
+    }
+
+    function showToast(message, isError = false) {
+      toast.textContent = message;
+      toast.classList.toggle("error", isError);
+      toast.hidden = false;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { toast.hidden = true; }, 3200);
+    }
+
+    function dateLabel(value) {
+      const parsed = new Date(`${value}T00:00:00`);
+      return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat("en-IN", {
+        day: "numeric", month: "short", year: "numeric"
+      }).format(parsed);
+    }
+
+    function iconFor(category) {
+      const name = category.toLowerCase();
+      if (/food|grocery|restaurant|coffee/.test(name)) return "☕";
+      if (/travel|transport|fuel|bus|taxi/.test(name)) return "↗";
+      if (/bill|utility|rent|home/.test(name)) return "⌂";
+      if (/health|medical|pharmacy/.test(name)) return "＋";
+      if (/shop|cloth/.test(name)) return "◇";
+      return "₹";
+    }
+
+    function renderExpenses() {
+      const sorted = [...expenses].sort((a, b) => b.date.localeCompare(a.date));
+      expensesList.replaceChildren();
+      const recent = sorted.slice(0, 5);
+      if (!recent.length) {
+        expensesList.innerHTML = '<div class="empty">No expenses yet. Add one to get started.</div>';
+      } else {
+        for (const expense of recent) {
+          const row = document.createElement("div");
+          row.className = "expense-row";
+          row.innerHTML = `<div class="expense-main"><div class="category-icon">${iconFor(expense.category)}</div><div><div class="expense-name"></div><div class="expense-date"></div></div></div><div class="expense-amount"></div>`;
+          row.querySelector(".expense-name").textContent = expense.category;
+          row.querySelector(".expense-date").textContent = dateLabel(expense.date);
+          row.querySelector(".expense-amount").textContent = money.format(expense.amount);
+          expensesList.append(row);
+        }
+      }
+
+      const total = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+      document.getElementById("hero-total").textContent = money.format(total);
+      document.getElementById("total-stat").textContent = money.format(total);
+      document.getElementById("count-stat").textContent = expenses.length;
+      const categories = new Map();
+      for (const expense of expenses) categories.set(expense.category, (categories.get(expense.category) || 0) + expense.amount);
+      const categoryList = document.getElementById("category-breakdown");
+      categoryList.replaceChildren();
+      const topCategories = [...categories].sort((a, b) => b[1] - a[1]).slice(0, 5);
+      if (!topCategories.length) {
+        categoryList.innerHTML = '<div class="empty">Your category breakdown will appear here.</div>';
+      } else {
+        for (const [category, amount] of topCategories) {
+          const item = document.createElement("div");
+          item.innerHTML = '<div class="category-heading"><span></span><span></span></div><div class="bar"><span></span></div>';
+          item.querySelector(".category-heading span:first-child").textContent = category;
+          item.querySelector(".category-heading span:last-child").textContent = money.format(amount);
+          item.querySelector(".bar span").style.width = `${Math.max(4, amount / topCategories[0][1] * 100)}%`;
+          categoryList.append(item);
+        }
+      }
+
+      renderExpenseTable();
+    }
+
+    function renderExpenseTable() {
+      const search = document.getElementById("expense-search").value.trim().toLowerCase();
+      const dateFilter = document.getElementById("expense-date-filter").value;
+      const sort = document.getElementById("sort-expenses").value;
+      const filtered = expenses.filter(expense =>
+        expense.category.toLowerCase().includes(search) && (!dateFilter || expense.date === dateFilter)
+      );
+      filtered.sort((a, b) => sort === "amount" ? b.amount - a.amount :
+        sort === "oldest" ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date));
+      tableBody.replaceChildren();
+      if (!filtered.length) {
+        const row = document.createElement("tr");
+        row.innerHTML = '<td colspan="3" class="empty">No matching expenses found.</td>';
+        tableBody.append(row);
+        return;
+      }
+      for (const expense of filtered) {
+        const row = document.createElement("tr");
+        row.innerHTML = "<td></td><td></td><td></td>";
+        row.cells[0].textContent = dateLabel(expense.date);
+        row.cells[1].textContent = expense.category;
+        row.cells[2].textContent = money.format(expense.amount);
+        tableBody.append(row);
+      }
+    }
+
+    function renderDiary() {
+      const container = document.getElementById("diary-entries");
+      container.replaceChildren();
+      document.getElementById("diary-stat").textContent = diaryEntries.length;
+      if (!diaryEntries.length) {
+        container.innerHTML = '<div class="empty">Your diary is waiting for its first entry.</div>';
+        return;
+      }
+      for (const entry of [...diaryEntries].reverse()) {
+        const article = document.createElement("article");
+        article.className = "entry";
+        const date = document.createElement("div");
+        date.className = "entry-date";
+        date.textContent = dateLabel(entry.date);
+        const text = document.createElement("div");
+        text.className = "entry-text";
+        text.textContent = entry.text;
+        article.append(date, text);
+        container.append(article);
+      }
+    }
+
+    async function refresh() {
+      const [expenseData, diaryData] = await Promise.all([
+        request("/api/expenses"), request("/api/diary")
+      ]);
+      expenses = expenseData;
+      diaryEntries = diaryData;
+      renderExpenses();
+      renderDiary();
+    }
+
+    function showPage(page) {
+      document.querySelectorAll(".section").forEach(section => section.classList.toggle("active", section.id === page));
+      document.querySelectorAll("[data-page]").forEach(button => button.classList.toggle("active", button.dataset.page === page));
+      document.getElementById("page-title").textContent = page === "diary" ? "My diary" : page[0].toUpperCase() + page.slice(1);
+    }
+
+    document.querySelectorAll("[data-page]").forEach(button => button.addEventListener("click", () => showPage(button.dataset.page)));
+    document.getElementById("new-expense").addEventListener("click", () => {
+      showPage("expenses");
+      const form = document.getElementById("expense-form");
+      form.hidden = !form.hidden;
+      if (!form.hidden) {
+        const now = new Date();
+        document.getElementById("expense-date").value = new Date(
+          now.getTime() - now.getTimezoneOffset() * 60000
+        ).toISOString().slice(0, 10);
+        document.getElementById("expense-category").focus();
+      }
+    });
+    document.getElementById("expense-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const category = document.getElementById("expense-category").value;
+      const amount = Number(document.getElementById("expense-amount").value);
+      const expenseDate = document.getElementById("expense-date").value;
+      try {
+        await request("/api/expenses", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ category, amount, date: expenseDate })
+        });
+        event.target.reset();
+        event.target.hidden = true;
+        await refresh();
+        showToast("Expense added.");
+      } catch (error) {
+        showToast(error.message, true);
+      }
+    });
+    document.getElementById("diary-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const text = document.getElementById("diary-text").value;
+      try {
+        await request("/api/diary", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text })
+        });
+        event.target.reset();
+        await refresh();
+        showToast("Diary entry saved.");
+      } catch (error) {
+        showToast(error.message, true);
+      }
+    });
+    ["expense-search", "expense-date-filter", "sort-expenses"].forEach(id =>
+      document.getElementById(id).addEventListener("input", renderExpenseTable)
+    );
+
+    refresh().catch(error => showToast(`Could not load your data: ${error.message}`, true));
+  </script>
+</body>
+</html>
